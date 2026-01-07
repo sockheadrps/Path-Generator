@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HumanMouse — Playground</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        .start-indicator,
+        .target-indicator {
+            position: absolute;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: auto;
+            z-index: 10;
+            border: 2px solid #fff;
+            cursor: grab;
+            transition: transform 0.1s;
+        }
+
+        .start-indicator:active,
+        .target-indicator:active {
+            cursor: grabbing;
+            transform: translate(-50%, -50%) scale(1.2);
+        }
+
+        .start-indicator {
+            background: var(--good);
+            box-shadow: 0 0 15px var(--good);
+        }
+
+        .target-indicator {
+            background: var(--warn);
+            box-shadow: 0 0 15px var(--warn);
+        }
+
+        /* Simple Tooltip */
+        .control-header[title]:hover::after {
+            content: attr(title);
+            position: absolute;
+            background: #1a1f35;
+            color: #fff;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            z-index: 1000;
+            width: 200px;
+            margin-left: 100px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            margin-left: 100px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .act-val {
+            font-size: 0.8em;
+            color: #fbbf24;
+            /* Amber-400 */
+            margin-left: 6px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+
+<body class="playground-body">
+    <aside class="playground-sidebar">
+        <div class="sidebar-actions">
+            <div class="sidebar-row">
+                <div id="pSteps" class="pill">Steps: 0</div>
+                <div id="pStatus" class="pill">Ready</div>
+            </div>
+            <div class="sidebar-row"><button id="randomize" class="btn primary small">Random Positions</button><button
+                    id="generate" class="btn good small">Generate Path</button></div>
+            <div class="sidebar-row" style="margin-top: 6px; justify-content: center;"><label
+                    style="font-size: 12px; display: flex; align-items: center; gap: 6px; cursor: pointer; opacity: 0.8;"><input
+                        type="checkbox" id="realTimeAnim" style="width: auto; height: auto; margin: 0;">Real-Time
+                    Animation </label></div>
+        </div>
+        <div class="sidebar-section">
+            <h3>PD Generator Controls</h3>
+            <div class="control-group">
+                <div class="control-header" title="Base movement speed (0.1 - 1.0)"><label>Speed</label><span><span
+                            class="control-val" id="speedVal">0.08</span><span id="speedAct"
+                            class="act-val"></span></span></div>
+                <!-- Range: 0.05 to 1.5 --><input type="range" id="speed" min="0.05" max="1.5" step="0.01" value="0.08">
+            </div>
+            <div class="control-group">
+                <div class="control-header" title="Correction strength (Global)"><label>Correction
+                        (Kp)</label><span><span class="control-val" id="kpVal">0.0004</span><span id="kpAct"
+                            class="act-val"></span></span></div>
+                <!-- Range: 0.0 to 0.02 --><input type="range" id="kp" min="0.0" max="0.02" step="0.0001"
+                    value="0.0004">
+            </div>
+            <div class="control-group">
+                <div class="control-header" title="Point density at start"><label>Prob Start</label><span><span
+                            class="control-val" id="keep_prob_startVal">0.70</span><span id="keep_prob_startAct"
+                            class="act-val"></span></span></div><input type="range" id="keep_prob_start" min="0.1"
+                    max="1.0" step="0.01" value="0.70">
+            </div>
+            <div class="control-group">
+                <div class="control-header" title="Point density at end"><label>Prob End</label><span><span
+                            class="control-val" id="keep_prob_endVal">0.98</span><span id="keep_prob_endAct"
+                            class="act-val"></span></span></div><input type="range" id="keep_prob_end" min="0.5"
+                    max="1.0" step="0.01" value="0.98">
+            </div>
+            <div class="control-group">
+                <div class="control-header" title="Wrist Pivot / Systematic Arc"><label>Arc
+                        Strength</label><span><span class="control-val" id="arc_strengthVal">0.27</span><span
+                            id="arc_strengthAct" class="act-val"></span></span></div>
+                <!-- Range: 0.0 to 0.5 --><input type="range" id="arc_strength" min="0.0" max="0.5" step="0.01"
+                    value="0.27">
+            </div>
+            <div class="control-group">
+                <div class="control-header" title="Randomness applied to all parameters per path">
+                    <label>Variance</label><span class="control-val" id="varianceVal">0.45</span>
+                </div>
+                <!-- Range: 0.0 to 0.5 --><input type="range" id="variance" min="0.0" max="0.5" step="0.01"
+                    value="0.45">
+            </div>
+            <div class="control-group">
+                <div class="control-header" title="Stabilization (Damping + Smoothing)">
+                    <label>Stabilization</label><span><span class="control-val" id="stabilizationVal">0.29</span><span
+                            id="stabilizationAct" class="act-val"></span></span>
+                </div>
+                <!-- Range: 0.0 (Raw) to 1.0 (Rigid/Smooth) --><input type="range" id="stabilization" min="0.0"
+                    max="0.8" step="0.01" value="0.29">
+            </div>
+            <div class="control-group">
+                <div class="control-header" title="Artificial Jitter"><label>Noise</label><span class="control-val"
+                        id="noiseVal">2.6</span></div><input type="range" id="noise" min="0.0" max="5.0" step="0.1"
+                    value="2.6">
+            </div>
+            <div class="control-group">
+                <div class="control-header" title="Probability of overshooting the target">
+                    <label>Overshoot</label><span class="control-val" id="overshoot_probVal">0.45</span>
+                </div>
+                <!-- Range: 0.0 to 1.0 --><input type="range" id="overshoot_prob" min="0.0" max="1.0" step="0.05"
+                    value="0.45">
+            </div>
+        </div>
+    </aside>
+    <main class="playground-main">
+        <div class="stage-container" id="stage"><canvas id="overlay" class="overlay"></canvas>
+            <div id="startPoint" class="start-indicator hidden"></div>
+            <div id="targetPoint" class="target-indicator hidden"></div>
+        </div>
+        <footer class="timeline-footer"><canvas id="timelineCanvas"></canvas></footer>
+    </main>
+    <script src="/static/playground.js"></script>
+</body>
+
+</html>

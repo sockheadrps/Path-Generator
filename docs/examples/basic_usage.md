@@ -1,0 +1,127 @@
+# Basic Usage
+
+This guide covers common usage patterns for the path generator.
+
+## Simple Path Generation
+
+```python
+from pathgenerator.app.pathgenerator import PDPathGenerator
+
+gen = PDPathGenerator()
+
+path, progress, steps, params = gen.generate_path(
+    start_x=100, start_y=200,
+    end_x=500, end_y=400
+)
+```
+
+### Return Values
+
+| Value | Type | Description |
+|-------|------|-------------|
+| `path` | `np.ndarray` | Array of (x, y) coordinates |
+| `progress` | `List[float]` | Progress value (0-1) for each point |
+| `steps` | `int` | Number of simulation steps |
+| `params` | `dict` | Actual parameters used (after randomization) |
+
+## Moving the Mouse
+
+To actually move the mouse, pair this with a mouse control library:
+
+=== "pyautogui"
+
+    ```python
+    import pyautogui
+    import time
+    from pathgenerator.app.pathgenerator import PDPathGenerator
+
+    pyautogui.PAUSE = 0  # Disable default 0.1s pause between actions
+
+    gen = PDPathGenerator()
+    path, *_ = gen.generate_path(100, 200, 500, 400)
+
+    for x, y in path:
+        pyautogui.moveTo(x, y)
+        time.sleep(0.01)
+    ```
+
+=== "pynput"
+
+    ```python
+    from pynput.mouse import Controller
+    import time
+    from pathgenerator.app.pathgenerator import PDPathGenerator
+
+    mouse = Controller()
+    gen = PDPathGenerator()
+    path, *_ = gen.generate_path(100, 200, 500, 400)
+
+    for x, y in path:
+        mouse.position = (x, y)
+        time.sleep(0.01)
+    ```
+
+## Canvas Size
+
+The generator is resolution-independent, but you can specify your canvas/viewport size for optimal step sizing:
+
+```python
+path, *_ = gen.generate_path(
+    100, 200, 500, 400,
+    canvas_width=2560,
+    canvas_height=1440
+)
+```
+
+!!! tip "Default Size"
+    The default is 1920x1080. Specifying your actual canvas size helps with step size calculations. The larger dimension is used for scaling.
+
+## Window/Viewport Targeting
+
+When targeting a specific window on screen, use `offset_x` and `offset_y` to translate coordinates:
+
+```python
+# Window at position (200, 100) on screen, size 800x600
+# Move from (50, 50) to (150, 100) within that window
+
+path, *_ = gen.generate_path(
+    50, 50, 150, 100,           # Coordinates relative to window
+    canvas_width=800,           # Window dimensions
+    canvas_height=600,
+    offset_x=200,               # Window's X position on screen
+    offset_y=100                # Window's Y position on screen
+)
+
+# Output path is in screen coordinates: (250, 150) → (350, 200)
+```
+
+The offset is applied to all output coordinates, so you can think in window-relative terms while getting screen-ready output.
+
+## Using Presets
+
+You can load motion parameters (speed, noise, etc.) from a JSON file:
+
+```json
+// natural.json
+{
+  "speed": 0.35,
+  "noise": 0.3,
+  "arc_strength": 0.15,
+  "overshoot_prob": 0.1
+}
+```
+
+Initialize the generator with the file path:
+
+```python
+gen = PDPathGenerator('natural.json')
+
+# Uses values from the JSON file
+path, *_ = gen.generate_path(100, 200, 500, 400)
+
+# You can still override specific values
+path, *_ = gen.generate_path(
+    100, 200, 500, 400,
+    speed=0.8  # Overrides preset speed
+)
+```

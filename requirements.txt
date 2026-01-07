@@ -1,0 +1,5 @@
+# FastAPI with all standard extras (uvicorn, jinja2, etc.)
+fastapi[standard]
+
+# Data processing
+numpy
