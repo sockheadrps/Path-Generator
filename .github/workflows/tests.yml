@@ -33,18 +33,17 @@ jobs:
 
       - name: Run Tests & Generate Reports
         run: |
-          # Run pytest, generating both a JSON report (for the test badge)
-          # and an XML report (for the coverage badge)
+          # CHANGED: Use --junitxml (Standard XML) instead of --json-report
           pytest -v \
-            --json-report --json-report-file=tests/report.json \
+            --junitxml=tests/report.xml \
             --cov=pathgenerator --cov-report=xml:tests/coverage.xml
 
       - name: Generate Badges
         run: |
-          # 1. Create the Test Status Badge
-          genbadge tests -i tests/report.json -o tests/tests-badge.svg
+          # CHANGED: Point to report.xml (XML) instead of report.json
+          genbadge tests -i tests/report.xml -o tests/tests-badge.svg
           
-          # 2. Create the Coverage Badge
+          # Coverage badge remains the same
           genbadge coverage -i tests/coverage.xml -o tests/coverage-badge.svg
 
       - name: Commit Badges
