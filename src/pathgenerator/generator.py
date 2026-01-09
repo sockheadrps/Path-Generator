@@ -32,12 +32,11 @@ class PDPathGenerator:
     Uses a standard unit-frame approach for resolution-independent path generation:
     
     1. Transform the problem so start=(0,0) and target=(1,0)
-    2. Simulate movement with feedforward velocity and PD correction
+    2. Simulate movement with feedforward velocity and PD correction (inlined for performance)
     3. Apply human-like noise, stabilization, and velocity profiles
     4. Transform back to screen coordinates
     
-    Each transformation step is implemented as a separate method for testability
-    and extensibility. The transformation pipeline per simulation step is:
+    The physics simulation loop integrates several behaviors:
     
     1. Feedforward + braking (Fitts's Law deceleration)
     2. PD correction (steer toward target/arc)
@@ -66,14 +65,14 @@ class PDPathGenerator:
 
     # Keys that are loaded from preset files
     PRESET_KEYS = (
-        'speed', 'kp_start', 'kp_end', 'stabilization', 'noise',
+        'mouse_velocity', 'kp_start', 'kp_end', 'stabilization', 'noise',
         'keep_prob_start', 'keep_prob_end', 'arc_strength', 'variance',
         'overshoot_prob'
     )
     
     # Default values for preset parameters
     DEFAULT_PRESET = {
-        'speed': 0.35,
+        'mouse_velocity': 0.65,
         'kp_start': 0.01,
         'kp_end': 0.01,
         'stabilization': 0.15,
@@ -124,7 +123,13 @@ class PDPathGenerator:
         with open(filepath, 'r') as f:
             data = json.load(f)
         
-        # Only load recognized keys
+        # Validate keys
+        supported = set(PDPathGenerator.PRESET_KEYS)
+        unknown = set(data.keys()) - supported
+        if unknown:
+            raise ValueError(f"Unknown parameters in preset file: {unknown}. Supported: {supported}")
+
+        # Only load recognized keys (safety reduntant but keeps logic clean)
         for key in PDPathGenerator.PRESET_KEYS:
             if key in data:
                 preset[key] = data[key]
@@ -145,9 +150,10 @@ class PDPathGenerator:
             New dictionary with jittered values.
         
         Example:
-            >>> params = {'speed': 0.35, 'noise': 0.2}
-            >>> jittered = PDPathGenerator._randomize(params, pct=0.1)
-            >>> 0.315 <= jittered['speed'] <= 0.385  # ±10% of 0.35
+            >>> jittered = PDPathGenerator._randomize({'x': 10.0, 'mouse_velocity': 0.35}, pct=0.1)
+            >>> 9.0 <= jittered['x'] <= 11.0
+            True
+            >>> 0.315 <= jittered['mouse_velocity'] <= 0.385  # ±10% of 0.35
             True
         """
         out = {}
@@ -159,21 +165,16 @@ class PDPathGenerator:
     # -------------------- Coordinate Transforms --------------------
     
     def _setup_transforms(self, start: np.ndarray, target: np.ndarray) -> None:
-        """Initialize unit-frame transforms.
-        
-        Sets up rotation matrices and distance for converting between
-        screen coordinates and the normalized unit frame where:
-        
-        - start = (0, 0)
-        - target = (1, 0)
-        
-        Args:
-            start: Starting point as numpy array [x, y].
-            target: Target point as numpy array [x, y].
-        """
-        self.R_screen, self.D = get_unit_transform(start, target)
-        self.R_unit = self.R_screen.T
-        self.origin = start
+            # 1. Get the transform that aligns Screen -> Unit (flattens the line)
+            R_align, self.D = get_unit_transform(start, target)
+            
+            # 2. Store it as R_unit
+            self.R_unit = R_align
+            
+            # 3. The inverse (Transpose) rotates Unit -> Screen (lifts the line)
+            self.R_screen = R_align.T
+            
+            self.origin = start
 
     def _unit_to_screen(self, Pu: np.ndarray) -> np.ndarray:
         """Convert unit-frame point to screen coordinates.
@@ -199,304 +200,7 @@ class PDPathGenerator:
 
     # -------------------- Velocity Transformations --------------------
     
-    def _init_velocity(self, speed: float) -> np.ndarray:
-        """Create initial velocity with random angle error.
-        
-        Simulates human imprecision at movement start. The initial direction
-        has a random angular error with ~17 degrees standard deviation.
-        
-        Args:
-            speed: Base velocity magnitude in unit space.
-        
-        Returns:
-            Initial velocity vector as float32 array.
-        """
-        angle_err = random.gauss(0, 0.3)
-        c, s_ang = np.cos(angle_err), np.sin(angle_err)
-        rot = np.array([[c, -s_ang], [s_ang, c]], dtype=np.float32)
-        return (rot @ np.array([speed, 0.0], dtype=np.float32))
-
-    def _apply_feedforward(
-        self, 
-        direction: np.ndarray, 
-        speed: float, 
-        progress: float
-    ) -> Tuple[np.ndarray, float]:
-        """Apply feedforward velocity with Fitts's Law style braking.
-        
-        Creates the characteristic velocity profile where movement is fast
-        in the middle and slow near the target. The braking follows Fitts's
-        Law: humans naturally slow down as they approach a target.
-        
-        Args:
-            direction: Unit vector of current movement direction.
-            speed: Base velocity magnitude in unit space.
-            progress: Path completion ratio (0.0 at start, 1.0 at target).
-        
-        Returns:
-            Tuple containing:
-                - velocity: The feedforward velocity vector.
-                - brake: The braking factor (0.15 to 1.0).
-        """
-        dist_rem = 1.0 - progress
-        brake = float(np.clip(dist_rem * 4.0, 0.15, 1.0))
-        v_unit = direction * (speed * brake)
-        return v_unit, brake
-
-    def _compute_kp_blend(self, progress: float, knobs: dict) -> float:
-        """Compute blended KP value based on progress along path.
-        
-        Uses distance-weighted blending between kp_start and kp_end:
-        
-        - First half (0-50%): kp_start dominates, fading to 0 at midpoint
-        - Second half (50-100%): kp_end grows from 0 to full strength
-        
-        This allows different correction behavior at the start (coarse
-        acquisition) vs. end (fine targeting).
-        
-        Args:
-            progress: Path completion ratio (0.0 to 1.0).
-            knobs: Parameter dictionary containing 'kp_start' and 'kp_end'.
-        
-        Returns:
-            Blended KP value for current progress.
-        """
-        if progress < 0.5:
-            weight_far = 1.0 - (progress / 0.5)
-            weight_near = 0.0
-        else:
-            weight_far = 0.0
-            weight_near = (progress - 0.5) / 0.5
-        
-        return weight_far * knobs["kp_start"] + weight_near * knobs["kp_end"]
-
-    def _compute_arc_offset(
-        self, 
-        progress: float, 
-        arc_strength: float, 
-        arc_sign: float
-    ) -> float:
-        """Calculate ideal Y offset for arc trajectory.
-        
-        Uses a sine wave to create a smooth arc that bulges in the middle
-        and returns to the straight line at both endpoints:
-        `y = arc_sign * arc_strength * sin(π * progress)`
-        
-        Args:
-            progress: Path completion ratio (0.0 to 1.0).
-            arc_strength: Maximum arc height (0.0 to ~0.5 typical).
-            arc_sign: Direction of arc (+1 or -1).
-        
-        Returns:
-            Ideal Y position in unit frame for smooth arc trajectory.
-        """
-        if arc_strength > 1e-4:
-            return arc_sign * arc_strength * np.sin(progress * np.pi)
-        return 0.0
-
-    def _apply_pd_correction(
-        self,
-        v_unit: np.ndarray,
-        P_unit: np.ndarray,
-        progress: float,
-        brake: float,
-        knobs: dict,
-        arc_sign: float,
-        err_sum_unit: np.ndarray
-    ) -> Tuple[np.ndarray, np.ndarray]:
-        """Apply adaptive PD correction with arc offset.
-        
-        Steers the path toward the target (or arc trajectory) using
-        proportional-integral control. The correction strength adapts
-        based on progress and braking.
-        
-        Args:
-            v_unit: Current velocity vector in unit frame.
-            P_unit: Current position in unit frame.
-            progress: Path completion ratio (0.0 to 1.0).
-            brake: Current braking factor from feedforward.
-            knobs: Parameter dictionary with 'kp_start', 'kp_end', 'arc_strength'.
-            arc_sign: Direction of arc curve (+1 or -1).
-            err_sum_unit: Accumulated error for integral term.
-        
-        Returns:
-            Tuple containing:
-                - v_unit: Modified velocity vector.
-                - err_sum_unit: Updated accumulated error.
-        """
-        current_kp = self._compute_kp_blend(progress, knobs)
-        current_kp *= brake
-
-        if current_kp > 1e-6:
-            ideal_y = self._compute_arc_offset(progress, knobs["arc_strength"], arc_sign)
-            
-            err_x = 1.0 - P_unit[0]
-            err_y = ideal_y - P_unit[1]
-            err_unit = np.array([err_x, err_y], np.float32)
-            
-            err_sum_unit = err_sum_unit + err_unit
-            
-            ki = 0.0005
-            v_unit = v_unit + current_kp * 20.0 * err_unit + ki * err_sum_unit
-
-        return v_unit, err_sum_unit
-
-    def _apply_noise(
-        self,
-        v_unit: np.ndarray,
-        noise_state: np.ndarray,
-        progress: float,
-        noise_strength: float
-    ) -> Tuple[np.ndarray, np.ndarray]:
-        """Apply Ornstein-Uhlenbeck correlated noise.
-        
-        Creates smooth, correlated random perturbations that simulate
-        natural hand tremor and micro-imprecision. Unlike white noise,
-        this produces smooth wandering motion.
-        
-        The noise automatically decays near the target to ensure accurate
-        endpoint arrival.
-        
-        Args:
-            v_unit: Current velocity vector in unit frame.
-            noise_state: Current noise state for Ornstein-Uhlenbeck process.
-            progress: Path completion ratio (0.0 to 1.0).
-            noise_strength: Noise intensity (0.0 to 1.0 typical).
-        
-        Returns:
-            Tuple containing:
-                - v_unit: Modified velocity vector.
-                - noise_state: Updated noise state.
-        """
-        if noise_strength <= 1e-4:
-            return v_unit, noise_state
-            
-        theta = 0.15
-        sigma = noise_strength * 0.002
-        
-        nf = (1.0 - progress) ** 1.3
-        
-        rand_kick = np.array([random.gauss(0, 1), random.gauss(0, 1)], dtype=np.float32)
-        noise_state = noise_state + (-theta * noise_state) + (sigma * rand_kick)
-        
-        v_unit = v_unit + noise_state * nf
-        
-        return v_unit, noise_state
-
-    def _apply_stabilization(
-        self,
-        v_unit: np.ndarray,
-        vprev_unit: np.ndarray,
-        stabilization: float
-    ) -> np.ndarray:
-        """Apply damping and smoothing to velocity.
-        
-        Combines two effects for natural motion:
-        
-        1. **Damping**: Reduces sudden velocity changes
-        2. **Smoothing**: Blends current velocity with previous
-        
-        Higher stabilization creates smoother, more flowing paths but
-        reduces responsiveness to corrections.
-        
-        Args:
-            v_unit: Current velocity vector.
-            vprev_unit: Previous velocity vector.
-            stabilization: Stabilization factor (0.0 to 1.0).
-        
-        Returns:
-            Stabilized velocity vector.
-        """
-        damp_val = stabilization * 0.5
-        if damp_val > 1e-6:
-            v_unit = v_unit - damp_val * (v_unit - vprev_unit)
-        
-        alpha = max(0.01, 1.0 - stabilization)
-        v_unit = alpha * v_unit + (1.0 - alpha) * vprev_unit
-        
-        return v_unit
-
-    def _limit_step(
-        self,
-        v_unit: np.ndarray,
-        P_unit: np.ndarray,
-        progress: float,
-        max_step_units: float
-    ) -> np.ndarray:
-        """Limit step magnitude and prevent backing up.
-        
-        Ensures movement stays within reasonable bounds:
-        
-        1. Limits maximum step size (tighter near target)
-        2. Prevents significant backward motion (X shouldn't decrease)
-        
-        Args:
-            v_unit: Current velocity vector.
-            P_unit: Current position in unit frame.
-            progress: Path completion ratio (0.0 to 1.0).
-            max_step_units: Maximum step size in unit space.
-        
-        Returns:
-            Limited velocity vector.
-        """
-        mag = float(np.linalg.norm(v_unit)) + 1e-8
-        step_limit = max_step_units * (0.5 + 0.5 * (1.0 - progress) ** 1.5)
-        if mag > step_limit:
-            v_unit = v_unit * (step_limit / mag)
-        
-        max_forward = max(0.0, 1.0 - P_unit[0])
-        if v_unit[0] > max_forward:
-            v_unit[0] = max_forward
-        
-        return v_unit
-
-    def _integrate_step(
-        self,
-        P_unit: np.ndarray,
-        v_unit: np.ndarray
-    ) -> Tuple[np.ndarray, np.ndarray, float]:
-        """Integrate velocity to get next position.
-        
-        Performs Euler integration and converts through screen coordinates
-        for numerical consistency.
-        
-        Args:
-            P_unit: Current position in unit frame.
-            v_unit: Current velocity in unit frame.
-        
-        Returns:
-            Tuple containing:
-                - new_px: New position in screen coordinates.
-                - P_unit: New position in unit frame.
-                - progress: New progress value (0.0 to 1.0).
-        """
-        P_next = (P_unit + v_unit).astype(np.float32)
-        P_next[0] = float(np.clip(P_next[0], -0.05, 1.0))
-        
-        new_px = self._unit_to_screen(P_next)
-        P_unit = self._screen_to_unit(new_px)
-        progress = float(np.clip(P_unit[0], 0.0, 1.0))
-        
-        return new_px, P_unit, progress
-
-    def _should_keep_point(self, progress: float, knobs: dict) -> bool:
-        """Determine if current point should be kept based on density settings.
-        
-        Uses linear interpolation between start and end keep probabilities.
-        Points near the end (progress >= 0.97) are always kept for accuracy.
-        
-        Args:
-            progress: Path completion ratio (0.0 to 1.0).
-            knobs: Parameter dictionary with 'keep_prob_start' and 'keep_prob_end'.
-        
-        Returns:
-            True if the point should be included in the final path.
-        """
-        kp_s = knobs["keep_prob_start"]
-        kp_e = knobs["keep_prob_end"]
-        keep_p = kp_s + (kp_e - kp_s) * progress
-        
-        return random.random() < keep_p or progress >= 0.97
+    # _init_velocity and _compute_kp_blend removed (logic inlined in generate_path)
 
     # -------------------- Path Post-Processing --------------------
 
@@ -567,6 +271,9 @@ class PDPathGenerator:
             to_target = target_pt - pos
             pos = pos + to_target * ease * 0.5
             overshoot_points.append(pos.copy())
+
+        # ensure overshoot_points ends with target_pt    
+        overshoot_points.append(target_pt)
         
         return np.vstack([path, overshoot_points])
 
@@ -574,7 +281,7 @@ class PDPathGenerator:
 
     def _prepare_knobs(
         self,
-        speed: float,
+        mouse_velocity: float,
         kp_start: float,
         kp_end: float,
         stabilization: float,
@@ -592,7 +299,7 @@ class PDPathGenerator:
         scales KP values based on path distance.
         
         Args:
-            speed: Base velocity magnitude.
+            mouse_velocity: Base velocity magnitude.
             kp_start: Correction strength at path start.
             kp_end: Correction strength near target.
             stabilization: Smoothing/damping factor.
@@ -609,7 +316,7 @@ class PDPathGenerator:
         """
         knobs = self._randomize(
             dict(
-                speed=speed,
+                mouse_velocity=mouse_velocity,
                 kp_start=kp_start,
                 kp_end=kp_end,
                 stabilization=stabilization,
@@ -643,7 +350,7 @@ class PDPathGenerator:
         *,
         offset_x: float = 0.0,
         offset_y: float = 0.0,
-        speed: Optional[float] = None,
+        mouse_velocity: Optional[float] = None,
         kp_start: Optional[float] = None,
         kp_end: Optional[float] = None,
         stabilization: Optional[float] = None,
@@ -672,7 +379,7 @@ class PDPathGenerator:
             canvas_height: Canvas/viewport height in pixels.
             offset_x: X offset to add to output coordinates (for window positioning).
             offset_y: Y offset to add to output coordinates (for window positioning).
-            speed: Base velocity (default: from preset).
+            mouse_velocity: Base velocity (default: from preset).
             kp_start: Correction strength at start (default: from preset).
             kp_end: Correction strength near target (default: from preset).
             stabilization: Smoothing factor (default: from preset).
@@ -698,7 +405,7 @@ class PDPathGenerator:
             >>> path, progress, steps, params = gen.generate_path(
             ...     start_x=100, start_y=200,
             ...     end_x=500, end_y=400,
-            ...     speed=0.35,
+            ...     mouse_velocity=0.35,
             ...     noise=0.2,
             ...     arc_strength=0.15
             ... )
@@ -716,13 +423,9 @@ class PDPathGenerator:
         
         self._setup_transforms(start_vec, target_vec)
         
-        canvas_size = max(canvas_width, canvas_height)
-        max_px_step = canvas_size / 160.0
-        max_step_units = max_px_step / max(self.D, 1e-6)
-
         # Resolve parameters from arguments or current preset
         p = self.preset
-        speed = speed if speed is not None else p['speed']
+        mouse_velocity = mouse_velocity if mouse_velocity is not None else p['mouse_velocity']
         kp_start = kp_start if kp_start is not None else p['kp_start']
         kp_end = kp_end if kp_end is not None else p['kp_end']
         stabilization = stabilization if stabilization is not None else p['stabilization']
@@ -732,14 +435,20 @@ class PDPathGenerator:
         arc_strength = arc_strength if arc_strength is not None else p['arc_strength']
         variance = variance if variance is not None else p['variance']
         overshoot_prob = overshoot_prob if overshoot_prob is not None else p['overshoot_prob']
+        
+        canvas_size = max(canvas_width, canvas_height)
+        
+        max_px_step = np.clip(self.D / 30.0, 12.0, 50.0)
+
+        max_step_units = max_px_step / max(self.D, 1e-6)
 
         knobs = self._prepare_knobs(
-            speed, kp_start, kp_end, stabilization, arc_strength,
+            mouse_velocity, kp_start, kp_end, stabilization, arc_strength,
             noise, overshoot_prob, keep_prob_start, keep_prob_end,
             variance, canvas_size
         )
         
-        SPEED = knobs["speed"]
+        SPEED = knobs["mouse_velocity"]
 
         P_unit = self._screen_to_unit(np.array(start_px, np.float32))
         vprev_unit = np.array([0.0, 0.0], np.float32)
@@ -758,45 +467,186 @@ class PDPathGenerator:
         prog.append(0.0)
 
         steps = 0
+        last_saved_px = start_screen
+
+        # ---------------------------------------------------------
+        # PERFORMANCE OPTIMIZATION: Inline Physics Loop
+        # ---------------------------------------------------------
+        # Python function calls are expensive. For maximum speed, 
+        # we inline the physics logic directly into the main loop.
+        # ---------------------------------------------------------
+
+        # Pre-calculated constants
+        MAX_STEP_M = max_step_units
+        NOISE_STRENGTH = knobs["noise"]
+        STABILIZATION = knobs["stabilization"]
+        KP_START = knobs["kp_start"]
+        KP_END = knobs["kp_end"]
+        ARC_STR = knobs["arc_strength"]
+        OVERSHOOT_PROB = knobs["overshoot_prob"]
+        
+        # Keep probability interpolation factors
+        KP_S = knobs["keep_prob_start"]
+        KP_E = knobs["keep_prob_end"]
+        
+        # Noise constants
+        SIGMA = NOISE_STRENGTH * 0.002
+        THETA = 0.15
+
+        # PD constants
+        KI = 0.0005
+        PD_GAIN = 20.0
+
+        # Run loop
         while steps < max_steps:
+            # 1. Update State
             s = float(np.clip(P_unit[0], 0.0, 1.0))
 
             if steps == 0:
-                vprev_unit = self._init_velocity(SPEED)
+                # _init_velocity inline
+                angle_err = random.gauss(0, 0.3)
+                c, s_ang = np.cos(angle_err), np.sin(angle_err)
+                rot = np.array([[c, -s_ang], [s_ang, c]], dtype=np.float32)
+                vprev_unit = rot @ np.array([SPEED, 0.0], dtype=np.float32)
             
+            # 2. Feedforward + Braking (Fitts's Law)
             current_speed = np.linalg.norm(vprev_unit)
             if current_speed < 1e-6:
                 direction = np.array([1.0, 0.0], dtype=np.float32)
             else:
                 direction = vprev_unit / current_speed
             
-            v_unit, brake = self._apply_feedforward(direction, SPEED, s)
+            dist_rem = 1.0 - s
+            brake = float(np.clip(dist_rem * 4.0, 0.15, 1.0))
+            v_unit = direction * (SPEED * brake)
 
-            v_unit, err_sum_unit = self._apply_pd_correction(
-                v_unit, P_unit, s, brake, knobs, arc_sign, err_sum_unit
-            )
+            # 3. PD Correction
+            # _compute_kp_blend inline
+            if s < 0.5:
+                weight_far = 1.0 - (s / 0.5)
+                current_kp = weight_far * KP_START
+            else:
+                weight_near = (s - 0.5) / 0.5
+                current_kp = weight_near * KP_END
+            
+            current_kp *= brake
 
-            v_unit, noise_state = self._apply_noise(
-                v_unit, noise_state, s, knobs["noise"]
-            )
+            if current_kp > 1e-6:
+                # _compute_arc_offset inline
+                if ARC_STR > 1e-4:
+                    ideal_y = arc_sign * ARC_STR * np.sin(s * np.pi)
+                else:
+                    ideal_y = 0.0
+                
+                err_x = 1.0 - P_unit[0]
+                err_y = ideal_y - P_unit[1]
+                
+                # Manual array creation is faster than np.array usually, 
+                # but we need vector math.
+                # err_unit = np.array([err_x, err_y], np.float32)
+                
+                err_sum_unit[0] += err_x
+                err_sum_unit[1] += err_y
+                
+                # v_unit = v_unit + current_kp * 20.0 * err_unit + ki * err_sum_unit
+                # Unrolled for speed:
+                v_unit[0] += current_kp * PD_GAIN * err_x + KI * err_sum_unit[0]
+                v_unit[1] += current_kp * PD_GAIN * err_y + KI * err_sum_unit[1]
 
-            v_unit = self._apply_stabilization(v_unit, vprev_unit, knobs["stabilization"])
+            # 4. Correlated Noise (Ornstein-Uhlenbeck)
+            if NOISE_STRENGTH > 1e-4:
+                nf = (1.0 - s) ** 1.3
+                
+                # Random kick
+                r1 = random.gauss(0, 1)
+                r2 = random.gauss(0, 1)
+                
+                # Update noise state: noise_state = noise_state - theta*noise_state + sigma*kick
+                ns_x = noise_state[0]
+                ns_y = noise_state[1]
+                
+                noise_state[0] = ns_x + (-THETA * ns_x) + (SIGMA * r1)
+                noise_state[1] = ns_y + (-THETA * ns_y) + (SIGMA * r2)
+                
+                v_unit[0] += noise_state[0] * nf
+                v_unit[1] += noise_state[1] * nf
 
-            v_unit = self._limit_step(v_unit, P_unit, s, max_step_units)
+            # 5. Stabilization
+            damp_val = STABILIZATION * 0.5
+            if damp_val > 1e-6:
+                # v_unit = v_unit - damp_val * (v_unit - vprev_unit)
+                v_unit[0] -= damp_val * (v_unit[0] - vprev_unit[0])
+                v_unit[1] -= damp_val * (v_unit[1] - vprev_unit[1])
+            
+            alpha = max(0.01, 1.0 - STABILIZATION)
+            # v_unit = alpha * v_unit + (1.0 - alpha) * vprev_unit
+            v_unit[0] = alpha * v_unit[0] + (1.0 - alpha) * vprev_unit[0]
+            v_unit[1] = alpha * v_unit[1] + (1.0 - alpha) * vprev_unit[1]
 
-            new_px, P_unit, s = self._integrate_step(P_unit, v_unit)
-            vprev_unit = v_unit.copy()
+            # 6. Limit Step
+            mag = float(np.hypot(v_unit[0], v_unit[1])) + 1e-8
+            step_limit = MAX_STEP_M * (0.5 + 0.5 * (1.0 - s) ** 1.5)
+            if mag > step_limit:
+                scale = step_limit / mag
+                v_unit[0] *= scale
+                v_unit[1] *= scale
+            
+            max_forward = max(0.0, 1.0 - P_unit[0])
+            if v_unit[0] > max_forward:
+                v_unit[0] = max_forward
 
-            if self._should_keep_point(s, knobs):
-                path.append((float(new_px[0]), float(new_px[1])))
+            # 7. Integrate
+            # P_next = P_unit + v_unit
+            pn_x = P_unit[0] + v_unit[0]
+            pn_y = P_unit[1] + v_unit[1]
+            
+            # Clip X
+            if pn_x > 1.0: pn_x = 1.0
+            elif pn_x < -0.05: pn_x = -0.05
+            
+            # Calculate screen pos manually to avoid function call overhead
+            # P_screen = origin + (Pu * D) @ R_screen
+            # This matrix mul is unavoidable but expensive.
+            # R_screen is 2x2.
+            # Let's perform the transform inline.
+            # P_unit_scaled = (pn_x * D, pn_y * D)
+            pus_x = pn_x * self.D
+            pus_y = pn_y * self.D
+            
+            # rot is (2,2)
+            # res = [pus_x*R00 + pus_y*R10, pus_x*R01 + pus_y*R11] + origin
+            
+            new_px_x = self.origin[0] + (pus_x * self.R_screen[0,0] + pus_y * self.R_screen[1,0])
+            new_px_y = self.origin[1] + (pus_x * self.R_screen[0,1] + pus_y * self.R_screen[1,1])
+            
+            # Update P_unit (for next iteration, usually just P_next unless we clamped/transformed back)
+            # Since we just clipped pn_x, we can use that directly for the loop state
+            P_unit[0] = pn_x
+            P_unit[1] = pn_y
+            
+            vprev_unit[0] = v_unit[0]
+            vprev_unit[1] = v_unit[1]
+
+            # 8. Store Point
+            keep_p = KP_S + (KP_E - KP_S) * s
+            
+            should_keep = random.random() < keep_p or s >= 0.97
+            
+            if should_keep:
+                path.append((float(new_px_x), float(new_px_y)))
                 prog.append(s)
+                last_saved_px[0] = new_px_x
+                last_saved_px[1] = new_px_y
 
-            dist_px = float(np.hypot(target_px[0] - new_px[0], target_px[1] - new_px[1]))
-            if (dist_px <= tol_px) or s >= 0.995:
+            # Check termination
+            # dist_target = hypot(target - new)
+            dtx = target_px[0] - new_px_x
+            dty = target_px[1] - new_px_y
+            if (dtx*dtx + dty*dty) <= (tol_px * tol_px) or s >= 0.995:
                 break
 
             steps += 1
-
+        
         path_array = np.array(path, dtype=np.float32)
         
         path_fixed = rotate_scale_path_to_hit_target(

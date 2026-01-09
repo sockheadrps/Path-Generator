@@ -10,6 +10,29 @@ A Python library for generating human-like mouse movement paths using PD (Propor
 - **Resolution independent** - Works across different screen sizes
 - **Overshoot simulation** - Optional target overshoot and correction
 
+
+## Installation
+
+=== "Base"
+    ```bash
+    pip install pathgenerator
+    ```
+
+=== "Server/Playground"
+    ```bash
+    pip install pathgenerator[server]
+    ```
+
+=== "Windows Emulation"
+    ```bash
+    pip install pathgenerator[windows]
+    ```
+
+=== "All Extras"
+    ```bash
+    pip install pathgenerator[server,windows]
+    ```
+
 ## Quick Start
 
 ```python
@@ -17,28 +40,43 @@ from pathgenerator import PDPathGenerator
 
 # Create generator
 gen = PDPathGenerator()
+# gen = PDPathGenerator('params.json') to load params from a json file
 
-# Generate a path from (100, 200) to (500, 400)
-path, progress, steps, params = gen.generate_path(
-    start_x=100, start_y=200,
-    end_x=500, end_y=400,
-    speed=0.35,
-    noise=0.2,
-    arc_strength=0.15
+# Define points
+start_x, start_y = 100, 200
+end_x, end_y = 900, 1000
+
+# Generate a path
+path, prog_list, steps, params = gen.generate_path(
+    start_x=start_x, start_y=start_y,
+    end_x=end_x, end_y=end_y,
+    offset_x=0, offset_y=0  # Optional offset if you target a relative area
 )
+
 
 # path is a numpy array of (x, y) coordinates
 for x, y in path:
     print(f"Move to ({x:.1f}, {y:.1f})")
 ```
 
-## Installation
+### Path Execution (Windows)
 
-```bash
-pip install numpy
+Use the optional `PathEmulator` to move the mouse cursor:
+
+```python
+from pathgenerator import PDPathGenerator, PathEmulator
+
+# Requires: pip install pathgenerator[windows]
+emulator = PathEmulator()
+gen = PDPathGenerator()
+
+# Generate from current mouse position
+start_x, start_y = emulator.get_position()
+path, *_ = gen.generate_path(start_x, start_y, 500, 500)
+
+emulator.execute_path(path)
 ```
 
-Then add the `pathgenerator` package to your project.
 
 ## How It Works
 
@@ -50,42 +88,6 @@ The generator uses a **unit-frame approach**:
 4. Transform back to screen coordinates
 
 See the [Algorithm Guide](path_generation.md) for a detailed explanation.
-
-## Example Paths
-
-### Natural Movement
-```python
-path, *_ = gen.generate_path(
-    100, 200, 500, 400,
-    speed=0.35,
-    kp_start=0.015,
-    kp_end=0.008,
-    noise=0.3,
-    arc_strength=0.15
-)
-```
-
-### Quick/Sloppy Movement
-```python
-path, *_ = gen.generate_path(
-    100, 200, 500, 400,
-    speed=0.5,
-    noise=0.5,
-    arc_strength=0.25,
-    overshoot_prob=0.3
-)
-```
-
-### Precise/Careful Movement
-```python
-path, *_ = gen.generate_path(
-    100, 200, 500, 400,
-    speed=0.2,
-    kp_end=0.02,
-    stabilization=0.3,
-    noise=0.1
-)
-```
 
 ## Next Steps
 

@@ -1,0 +1,12 @@
+{
+  "mouse_velocity": 0.65,
+  "kp_start": 0.0004,
+  "kp_end": 0.0004,
+  "stabilization": 0.29,
+  "noise": 2.6,
+  "keep_prob_start": 0.7,
+  "keep_prob_end": 0.98,
+  "arc_strength": 0.27,
+  "variance": 0.45,
+  "overshoot_prob": 0.45
+}

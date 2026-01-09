@@ -2,7 +2,7 @@
 
 Coordinate transformation utilities for the path generator.
 
-::: geometry
+::: pathgenerator.geometry
     options:
       show_root_heading: true
       show_source: true

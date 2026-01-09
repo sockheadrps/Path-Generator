@@ -5,7 +5,7 @@ This guide covers common usage patterns for the path generator.
 ## Simple Path Generation
 
 ```python
-from pathgenerator.app.pathgenerator import PDPathGenerator
+from pathgenerator import PDPathGenerator
 
 gen = PDPathGenerator()
 
@@ -26,14 +26,33 @@ path, progress, steps, params = gen.generate_path(
 
 ## Moving the Mouse
 
-To actually move the mouse, pair this with a mouse control library:
+To actually move the mouse, pair this with a mouse control library, or (windows only) use the optional `PathEmulator` included when installing with `pip install pathgenerator[windows]`
+
+=== "PathEmulator (Windows)"
+
+    Recommended for Windows users for high performance and smooth movement.
+
+    ```python
+    from pathgenerator import PDPathGenerator, PathEmulator
+
+    # Requires: pip install pathgenerator[windows]
+    emulator = PathEmulator()
+    gen = PDPathGenerator()
+
+    # Generate from current mouse position
+    start_x, start_y = emulator.get_position()
+    path, *_ = gen.generate_path(start_x, start_y, 500, 400)
+
+    # Execute
+    emulator.execute_path(path)
+    ```
 
 === "pyautogui"
 
     ```python
     import pyautogui
     import time
-    from pathgenerator.app.pathgenerator import PDPathGenerator
+    from pathgenerator import PDPathGenerator
 
     pyautogui.PAUSE = 0  # Disable default 0.1s pause between actions
 
@@ -50,7 +69,7 @@ To actually move the mouse, pair this with a mouse control library:
     ```python
     from pynput.mouse import Controller
     import time
-    from pathgenerator.app.pathgenerator import PDPathGenerator
+    from pathgenerator import PDPathGenerator
 
     mouse = Controller()
     gen = PDPathGenerator()
@@ -104,10 +123,16 @@ You can load motion parameters (speed, noise, etc.) from a JSON file:
 ```json
 // natural.json
 {
-  "speed": 0.35,
-  "noise": 0.3,
-  "arc_strength": 0.15,
-  "overshoot_prob": 0.1
+  "mouse_velocity": 0.65,
+  "kp_start": 0.0004,
+  "kp_end": 0.0004,
+  "stabilization": 0.29,
+  "noise": 2.6,
+  "keep_prob_start": 0.7,
+  "keep_prob_end": 0.98,
+  "arc_strength": 0.27,
+  "variance": 0.45,
+  "overshoot_prob": 0.45
 }
 ```
 
@@ -122,6 +147,6 @@ path, *_ = gen.generate_path(100, 200, 500, 400)
 # You can still override specific values
 path, *_ = gen.generate_path(
     100, 200, 500, 400,
-    speed=0.8  # Overrides preset speed
+    mouse_velocity=0.8  # Overrides preset velocity
 )
 ```

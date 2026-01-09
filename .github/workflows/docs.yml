@@ -1,0 +1,41 @@
+name: Deploy Docs
+
+on:
+  push:
+    branches: [ main ]  # Or 'master' if that is your default
+
+# Permissions required to push the gh-pages branch
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          # Install MkDocs and the specific plugins you use
+          pip install mkdocs-material "mkdocstrings[python]"
+          
+          # CRITICAL: Install your own package!
+          # This ensures mkdocstrings can import your code to extract docstrings.
+          # It also installs numpy/etc so imports don't crash during doc generation.
+          pip install . 
+
+      - name: Configure Git User
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+
+      - name: Deploy to GitHub Pages
+        run: |
+          # This command builds the site and pushes it to the 'gh-pages' branch
+          mkdocs gh-deploy --force

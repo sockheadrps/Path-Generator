@@ -11,15 +11,15 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field, ValidationError
-from .pathgenerator.generator import PDPathGenerator
+from .generator import PDPathGenerator
 import logging
 
 log = logging.getLogger(__name__)
 
 
-ROOT = Path(__file__).resolve().parents[1]
-TEMPLATES_DIR = ROOT / "app" / "templates"
-STATIC_DIR = ROOT / "app" / "static"
+ROOT = Path(__file__).resolve().parent
+TEMPLATES_DIR = ROOT / "templates"
+STATIC_DIR = ROOT / "static"
 
 
 app = FastAPI(title="Path Generator API", version="1.0.0")
@@ -49,7 +49,7 @@ class GenerateRequest(BaseModel):
     screen_h: int
     
     # Simplified PD knobs
-    speed: float = 0.35
+    mouse_velocity: float = 0.35
     kp_start: float = 0.010
     kp_end: float = 0.010
     stabilization: float = 0.15
@@ -76,8 +76,8 @@ async def generate(req: GenerateRequest):
             start_y=req.start[1],
             end_x=req.target[0],
             end_y=req.target[1],
-            screen_width=req.screen_w,
-            screen_height=req.screen_h,
+            canvas_width=req.screen_w,
+            canvas_height=req.screen_h,
             **req.model_dump(exclude={'start', 'target', 'screen_w', 'screen_h'})
         )
         return {
@@ -92,6 +92,9 @@ async def generate(req: GenerateRequest):
 
 
 
-if __name__ == "__main__":
+def main():
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=int(os.getenv("PORT", 8001)))
+    uvicorn.run(app, host="127.0.0.1", port=int(os.getenv("PORT", 8002)))
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,39 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pathgenerator"
+version = "0.1.0"
+description = "Human-like mouse path generation using PD control"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [{name = "Ryan Skiles", email = "r.p.skiles@gmail.com"}]
+dependencies = [
+    "numpy>=1.20.0"
+]
+
+[project.optional-dependencies]
+server = [
+    "fastapi[standard]",
+    "uvicorn",
+    "jinja2"
+]
+windows = [
+    "pywin32"
+]
+
+[project.urls]
+Homepage = "https://github.com/yourusername/pathgenerator"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pathgenerator"]
+
+[tool.coverage.run]
+omit = [
+    "src/pathgenerator/server.py",
+    "src/pathgenerator/pathemulator.py",
+    "*/tests/*",
+    "*/__init__.py"
+]
