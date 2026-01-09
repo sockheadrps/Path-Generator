@@ -15,22 +15,22 @@ A Python library for generating human-like mouse movement paths using PD (Propor
 
 === "Base"
     ```bash
-    pip install git+https://github.com/sockheadrps/Path-Generator.git
+    pip install pathgenerator
     ```
 
 === "Server/Playground"
     ```bash
-    pip install "pathgenerator[server] @ git+https://github.com/sockheadrps/Path-Generator.git"
+    pip install pathgenerator[server]
     ```
 
 === "Windows Emulation"
     ```bash
-    pip install "pathgenerator[windows] @ git+https://github.com/sockheadrps/Path-Generator.git"
+    pip install pathgenerator[windows]
     ```
 
 === "All Extras"
     ```bash
-    pip install "pathgenerator[server,windows] @ git+https://github.com/sockheadrps/Path-Generator.git"
+    pip install pathgenerator[server,windows]
     ```
 
 ## Quick Start

@@ -10,19 +10,19 @@ A Python library for generating human-like mouse paths using PD (Proportional-De
 ### Core Library
 Install the core library (only requires numpy):
 ```bash
-pip install git+https://github.com/sockheadrps/Path-Generator.git
+pip install pathgenerator
 ```
 
 ### With Windows Emulator
 Install with `pywin32` for high-performance cursor emulation (Windows only):
 ```bash
-pip install "pathgenerator[windows] @ git+https://github.com/sockheadrps/Path-Generator.git"
+pip install pathgenerator[windows]
 ```
 
 ### With Server
 Install with the optional FastAPI server:
 ```bash
-pip install "pathgenerator[server] @ git+https://github.com/sockheadrps/Path-Generator.git"
+pip install pathgenerator[server]
 ```
 
 ## Usage
