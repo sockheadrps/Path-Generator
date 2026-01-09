@@ -1,0 +1,64 @@
+name: Tests & Badges
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+# This allows the action to push the badge file back to your repo
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11' 
+          # You can change this to '3.12' if your project uses it
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          # We install your package (.) plus test tools
+          # Adjust this if you use requirements.txt instead
+          pip install . 
+          pip install pytest pytest-asyncio pytest-json-report pytest-cov genbadge[tests,coverage] pytest-mock
+
+      - name: Run Tests & Generate Reports
+        run: |
+          # Run pytest, generating both a JSON report (for the test badge)
+          # and an XML report (for the coverage badge)
+          pytest -v \
+            --json-report --json-report-file=tests/report.json \
+            --cov=pathgenerator --cov-report=xml:tests/coverage.xml
+
+      - name: Generate Badges
+        run: |
+          # 1. Create the Test Status Badge
+          genbadge tests -i tests/report.json -o tests/tests-badge.svg
+          
+          # 2. Create the Coverage Badge
+          genbadge coverage -i tests/coverage.xml -o tests/coverage-badge.svg
+
+      - name: Commit Badges
+        # Only run this step on the main branch (so PRs don't try to push commits)
+        if: github.ref == 'refs/heads/main'
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          
+          # Force add the badge files
+          git add tests/tests-badge.svg tests/coverage-badge.svg
+          
+          # Commit only if there are changes.
+          # [skip ci] prevents this commit from triggering a new infinite loop of actions.
+          git commit -m "Update badges [skip ci]" || echo "No changes to badges"
+          
+          git push

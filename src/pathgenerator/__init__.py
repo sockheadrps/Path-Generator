@@ -1,4 +1,9 @@
 from .generator import PDPathGenerator
+try:
+    from .pathemulator import PathEmulator
+except ImportError:
+    # Optional dependency missing
+    PathEmulator = None
 
 _path_generator = None
 

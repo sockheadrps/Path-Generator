@@ -6,14 +6,16 @@ This guide explains how to tune path generation parameters for different behavio
 
 | Category | Parameters | Purpose |
 |----------|------------|---------|
-| **Speed & Motion** | `speed`, `stabilization` | Control movement speed and smoothness |
+| **Speed & Motion** | `mouse_velocity`, `stabilization` | Control movement speed and smoothness |
 | **Correction** | `kp_start`, `kp_end` | How aggressively path steers to target |
 | **Character** | `noise`, `arc_strength`, `overshoot_prob` | Human-like imperfections |
 | **Density** | `keep_prob_start`, `keep_prob_end` | How many points in final path |
 
-## Speed
+### 1. Speed & Fluidity
 
-Controls base velocity. Higher = faster movement, fewer points.
+- **`mouse_velocity`**: Base movement velocity (unitless, ~0.1 to 1.0).
+  - Higher = Faster movement.
+  - *Typical*: `0.3` to `0.8`.
 
 | Value | Effect |
 |-------|--------|
@@ -23,10 +25,10 @@ Controls base velocity. Higher = faster movement, fewer points.
 
 ```python
 # Slow, careful movement
-path, *_ = gen.generate_path(100, 200, 500, 400, speed=0.15)
+path, *_ = gen.generate_path(100, 200, 500, 400, mouse_velocity=0.15)
 
 # Quick snap
-path, *_ = gen.generate_path(100, 200, 500, 400, speed=0.50)
+path, *_ = gen.generate_path(100, 200, 500, 400, mouse_velocity=0.50)
 ```
 
 !!! note
@@ -54,6 +56,14 @@ path, *_ = gen.generate_path(
     kp_end=0.025
 )
 ```
+
+# Example: High Precision
+path, *_ = gen.generate_path(
+    100, 100, 500, 500,
+    mouse_velocity=0.25,
+    kp_end=0.03,
+    noise=0.05
+)
 
 !!! tip "Typical Settings"
     - **Gaming/fast**: Low kp_start, moderate kp_end
@@ -119,6 +129,15 @@ path, *_ = gen.generate_path(
 )
 ```
 
+# Example: Casual / Browsing
+path, *_ = gen.generate_path(
+    100, 100, 500, 500,
+    mouse_velocity=0.5,
+    arc_strength=0.2,
+    noise=1.5,
+    arc_sign=1  # Curve "up" in unit space
+)
+
 !!! tip "Arc Direction"
     Use `arc_sign=1` or `arc_sign=-1` to control curve direction. Leave as `None` for random.
 
@@ -133,6 +152,14 @@ path, *_ = gen.generate_path(
     overshoot_prob=0.3
 )
 ```
+
+# Example: Flick Shot / Panic
+path, *_ = gen.generate_path(
+    100, 100, 500, 500,
+    mouse_velocity=0.9,
+    overshoot_prob=0.8
+    # error_limit not supported in current version
+)
 
 ## Point Density
 
@@ -159,7 +186,7 @@ Adds random variation to all other parameters for more natural variety.
 for _ in range(5):
     path, *_ = gen.generate_path(
         100, 200, 500, 400,
-        speed=0.35,
+        mouse_velocity=0.35,
         noise=0.2,
         variance=0.15  # ±15% variation on all params
     )
@@ -173,7 +200,7 @@ for _ in range(5):
 ```python
 path, *_ = gen.generate_path(
     start_x, start_y, end_x, end_y,
-    speed=0.3,
+    mouse_velocity=0.3,
     kp_start=0.02,
     kp_end=0.02,
     stabilization=0.1,
@@ -186,7 +213,7 @@ path, *_ = gen.generate_path(
 ```python
 path, *_ = gen.generate_path(
     start_x, start_y, end_x, end_y,
-    speed=0.35,
+    mouse_velocity=0.35,
     kp_start=0.012,
     kp_end=0.008,
     stabilization=0.15,
@@ -200,7 +227,7 @@ path, *_ = gen.generate_path(
 ```python
 path, *_ = gen.generate_path(
     start_x, start_y, end_x, end_y,
-    speed=0.5,
+    mouse_velocity=0.5,
     kp_start=0.008,
     kp_end=0.015,
     stabilization=0.1,
@@ -215,7 +242,7 @@ path, *_ = gen.generate_path(
 ```python
 path, *_ = gen.generate_path(
     start_x, start_y, end_x, end_y,
-    speed=0.2,
+    mouse_velocity=0.2,
     kp_start=0.015,
     kp_end=0.01,
     stabilization=0.35,

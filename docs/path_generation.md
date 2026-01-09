@@ -168,14 +168,14 @@ flowchart LR
 
     ### Feedforward + Braking
     
-    > **Method:** `_apply_feedforward`
+    > **Implementation:** Inlined physics calculation
     
     Maintains forward motion with **Fitts's Law** deceleration. Humans naturally slow down as they approach a target.
     
     ```python
     dist_rem = 1.0 - progress
     brake = clip(dist_rem * 4.0, 0.15, 1.0)
-    v_unit = direction * (speed * brake)
+    v_unit = direction * (mouse_velocity * brake)
     ```
     
     | Progress | Brake Factor |
@@ -188,7 +188,7 @@ flowchart LR
 
     ### PD Correction
     
-    > **Method:** `_apply_pd_correction`
+    > **Implementation:** Inlined physics calculation
     
     Steers toward target using **proportional-integral control** with adaptive gain.
     
@@ -210,7 +210,7 @@ flowchart LR
 
     ### Noise (Ornstein-Uhlenbeck)
     
-    > **Method:** `_apply_noise`
+    > **Implementation:** Inlined physics calculation
     
     Smooth, **correlated random perturbations** simulating hand tremor.
     
@@ -232,7 +232,7 @@ flowchart LR
 
     ### Stabilization
     
-    > **Method:** `_apply_stabilization`
+    > **Implementation:** Inlined physics calculation
     
     **Damping and smoothing** for natural, flowing motion.
     
@@ -249,7 +249,7 @@ flowchart LR
 
     ### Step Limiting
     
-    > **Method:** `_limit_step`
+    > **Implementation:** Inlined physics calculation
     
     Prevents **unrealistic jumps** and backward motion.
     
@@ -267,7 +267,7 @@ flowchart LR
 
     ### Integration
     
-    > **Method:** `_integrate_step`
+    > **Implementation:** Inlined physics calculation
     
     **Euler integration** to update position based on velocity.
     
@@ -284,7 +284,7 @@ flowchart LR
 
     ### Point Density
     
-    > **Method:** `_should_keep_point`
+    > **Implementation:** Inlined physics calculation
     
     Controls how many points are kept. **Sparser at start**, **denser at end**.
     
@@ -344,7 +344,7 @@ target ●←----
 
 | Parameter | Range | Description |
 |-----------|-------|-------------|
-| `speed` | 0.1 - 1.0 | Base velocity in unit space |
+| `mouse_velocity` | 0.1 - 1.0 | Base velocity in unit space |
 | `kp_start` | 0.0 - 0.1 | Correction strength at path start |
 | `kp_end` | 0.0 - 0.1 | Correction strength near target |
 | `stabilization` | 0.0 - 1.0 | Smoothing/damping factor |
@@ -355,5 +355,7 @@ target ●←----
 | `keep_prob_end` | 0.0 - 1.0 | Point density at end |
 | `variance` | 0.0 - 0.5 | Random variation in all parameters |
 | `overshoot_prob` | 0.0 - 1.0 | Chance of overshooting target |
+| `offset_x` / `y` | Any | Global offset added to output coordinates |
+| `canvas_width` / `h` | Pixels | Used for scaling variance relative to screen size |
 
 For detailed presets and tuning examples, see [Tuning Parameters](examples/tuning.md).

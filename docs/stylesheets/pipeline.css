@@ -122,14 +122,47 @@
     .pipeline-container {
         grid-template-columns: 1fr;
     }
-    
+
     .pipeline-flow {
         flex-direction: row;
         flex-wrap: wrap;
         justify-content: center;
     }
-    
+
     .pipeline-arrow {
         transform: rotate(90deg);
     }
+}
+
+/* Custom Navigation Styling */
+/* Target Section Headers (Examples, API Reference) */
+.md-nav__item--section>.md-nav__link,
+.md-nav__item--section>label.md-nav__link {
+    color: #696969 !important;
+    /* Muted gray */
+    font-weight: 700 !important;
+    cursor: default !important;
+    opacity: 0.8;
+}
+
+/* Remove hover effect for sections */
+.md-nav__item--section>.md-nav__link:hover,
+.md-nav__item--section>label.md-nav__link:hover {
+    color: #999 !important;
+    background: transparent !important;
+    cursor: default !important;
+}
+
+/* Target Site Title in Sidebar (Path Generator) */
+.md-nav--primary>.md-nav__title {
+    color: #999 !important;
+    font-weight: 800 !important;
+    cursor: default !important;
+    pointer-events: none;
+    /* Make strictly non-interactive */
+}
+
+/* Indent items under section headers */
+.md-nav__item--section .md-nav__list {
+    margin-left: 12px !important;
 }

@@ -20,7 +20,7 @@
 
     // Parameter Inputs
     const params = [
-        'speed', 'kp', 'stabilization', 'noise',
+        'mouse_velocity', 'kp_start', 'kp_end', 'stabilization', 'noise',
         'keep_prob_start', 'keep_prob_end', 'arc_strength', 'variance', 'overshoot_prob'
     ];
     const inputs = {};
@@ -130,12 +130,7 @@
                 basePayload[p] = (p === 'max_steps') ? parseInt(v) : parseFloat(v);
             }
         });
-        // Map unified params to generator expectations
-        if (basePayload.kp !== undefined) {
-            basePayload.kp_start = basePayload.kp;
-            basePayload.kp_end = basePayload.kp;
-            delete basePayload.kp;
-        }
+
 
         try {
             const r = await fetch('/api/generate', {
@@ -157,8 +152,9 @@
                     if (el) el.textContent = ' (' + (isPct ? (val * 100).toFixed(0) + '%' : val.toFixed(3)) + ')';
                 };
 
-                setAct('speed', ap.speed);
-                setAct('kp', ap.kp_start); // Use start as proxy for unified control
+                setAct('mouse_velocity', ap.mouse_velocity);
+                setAct('kp_start', ap.kp_start);
+                setAct('kp_end', ap.kp_end);
                 setAct('keep_prob_start', ap.keep_prob_start, true);
                 setAct('keep_prob_end', ap.keep_prob_end, true);
                 setAct('arc_strength', ap.arc_strength);
@@ -318,6 +314,72 @@
     randomizeBtn.addEventListener('click', randomizePoints);
     generateBtn.addEventListener('click', generatePath);
 
+    document.getElementById('showJson').addEventListener('click', () => {
+        const payload = {};
+        params.forEach(p => {
+            if (inputs[p]) {
+                const val = parseFloat(inputs[p].value);
+                payload[p] = val;
+            }
+        });
+
+        const jsonStr = JSON.stringify(payload, null, 2);
+
+        // Check for existing modal or create one
+        let modal = document.getElementById('jsonModal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'jsonModal';
+            modal.style.cssText = `
+                position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                background: #1a1f35; padding: 20px; border: 1px solid rgba(255,255,255,0.2);
+                border-radius: 8px; z-index: 2000; width: 400px; max-width: 90%;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            `;
+
+            const title = document.createElement('h3');
+            title.textContent = 'Current Preset JSON';
+            title.style.margin = '0 0 10px 0';
+            modal.appendChild(title);
+
+            const textarea = document.createElement('textarea');
+            textarea.id = 'jsonOutput';
+            textarea.style.cssText = `
+                width: 100%; height: 200px; background: #0f121f; color: #a5d6ff;
+                border: 1px solid rgba(255,255,255,0.1); border-radius: 4px;
+                padding: 10px; font-family: monospace; font-size: 12px; resize: vertical;
+            `;
+            modal.appendChild(textarea);
+
+            const btnRow = document.createElement('div');
+            btnRow.style.cssText = 'margin-top: 10px; display: flex; justify-content: flex-end; gap: 10px;';
+
+            const copyBtn = document.createElement('button');
+            copyBtn.textContent = 'Copy';
+            copyBtn.className = 'btn good small';
+            copyBtn.onclick = () => {
+                textarea.select();
+                document.execCommand('copy');
+                copyBtn.textContent = 'Copied!';
+                setTimeout(() => copyBtn.textContent = 'Copy', 1500);
+            };
+
+            const closeBtn = document.createElement('button');
+            closeBtn.textContent = 'Close';
+            closeBtn.className = 'btn small';
+            closeBtn.onclick = () => document.body.removeChild(modal);
+
+            btnRow.appendChild(copyBtn);
+            btnRow.appendChild(closeBtn);
+            modal.appendChild(btnRow);
+
+            document.body.appendChild(modal);
+        }
+
+        const ta = document.getElementById('jsonOutput');
+        if (ta) ta.value = jsonStr;
+    });
+
     // --- Drag Logic ---
     let dragItem = null; // 'start' | 'target'
 
@@ -366,8 +428,9 @@
             const t = JSON.parse(tuned);
             // Map keys (let tuner decide variance/noise)
             const map = {
-                'speed': t.speed,
-                'kp': t.kp,
+                'mouse_velocity': t.speed || t.mouse_velocity,
+                'kp_start': t.kp, // legacy mapping
+                'kp_end': t.kp,   // legacy mapping
                 'stabilization': t.stabilization,
                 'arc_strength': t.arc_strength,
                 'variance': t.variance || 0.0,
