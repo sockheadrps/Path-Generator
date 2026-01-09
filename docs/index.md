@@ -59,9 +59,28 @@ for x, y in path:
     print(f"Move to ({x:.1f}, {y:.1f})")
 ```
 
-### Path Execution (Windows)
+### Tuning Workflow (Server + JSON)
 
-Use the optional `PathEmulator` to move the mouse cursor:
+The easiest way to find realistic parameters is to use the interactive playground.
+*(Requires: `pip install pathgenerator[server]`)*
+
+1.  **Launch the server**:
+    ```bash
+    python -m pathgenerator.server
+    ```
+2.  **Tune settings** at `http://127.0.0.1:8001`.
+3.  **Download JSON**: Click "Export Preset" to save your settings as `human_relaxed.json`.
+4.  **Load in Python**:
+    ```python
+    # Initialize generator with your custom preset
+    gen = PDPathGenerator("human_relaxed.json")
+    
+    # All generated paths will now use those settings by default
+    path, *_ = gen.generate_path(100, 100, 500, 500)
+    ```
+
+### Executing Paths (Windows Only)
+The `PathEmulator` class includes a helper `get_position()` to simplify generating paths from your current mouse location.
 
 ```python
 from pathgenerator import PDPathGenerator, PathEmulator
@@ -70,11 +89,15 @@ from pathgenerator import PDPathGenerator, PathEmulator
 emulator = PathEmulator()
 gen = PDPathGenerator()
 
-# Generate from current mouse position
+# 1. Get current mouse position
 start_x, start_y = emulator.get_position()
+
+# 2. Generate path to target (e.g., 500, 500)
+# calculate offset if you are targeting a window relative to screen 0,0
 path, *_ = gen.generate_path(start_x, start_y, 500, 500)
 
-emulator.execute_path(path)
+# 3. Move the mouse (optional delay to control playback speed)
+emulator.execute_path(path, delay_between_points=0.001)
 ```
 
 

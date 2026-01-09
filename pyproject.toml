@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pathgenerator"
-version = "0.1.1"
+version = "0.1.2"
 description = "Human-like mouse path generation using PD control"
 readme = "README.md"
 requires-python = ">=3.8"
