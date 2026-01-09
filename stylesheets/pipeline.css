@@ -1,0 +1,168 @@
+/* Interactive Pipeline Diagram Styles */
+.pipeline-container {
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    gap: 2rem;
+    margin: 2rem 0;
+    min-height: 500px;
+}
+
+.pipeline-flow {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.pipeline-step {
+    background: var(--md-primary-fg-color, #4051b5);
+    color: white;
+    padding: 0.75rem 1.5rem;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: center;
+    min-width: 180px;
+    font-weight: 500;
+    border: 2px solid transparent;
+}
+
+.pipeline-step:hover {
+    transform: scale(1.05);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.pipeline-step.active {
+    border-color: #fff;
+    box-shadow: 0 0 0 3px var(--md-accent-fg-color, #536dfe);
+}
+
+.pipeline-step.muted {
+    background: var(--md-default-fg-color--lighter, #666);
+}
+
+.pipeline-arrow {
+    color: var(--md-default-fg-color--light, #999);
+    font-size: 1.2rem;
+}
+
+.pipeline-decision {
+    background: var(--md-primary-fg-color, #4051b5);
+    color: white;
+    padding: 0.75rem 1rem;
+    transform: rotate(45deg);
+    width: 80px;
+    height: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    margin: 0.5rem 0;
+}
+
+.pipeline-decision span {
+    transform: rotate(-45deg);
+    font-weight: 500;
+}
+
+.pipeline-detail {
+    background: var(--md-code-bg-color, #1e1e1e);
+    border-radius: 8px;
+    padding: 1.5rem;
+    border: 1px solid var(--md-default-fg-color--lightest, #333);
+    overflow-y: auto;
+    max-height: 600px;
+}
+
+.pipeline-detail h3 {
+    margin-top: 0;
+    color: var(--md-accent-fg-color, #536dfe);
+    border-bottom: 1px solid var(--md-default-fg-color--lightest, #333);
+    padding-bottom: 0.5rem;
+}
+
+.pipeline-detail .method-tag {
+    background: var(--md-accent-fg-color--transparent, rgba(83, 109, 254, 0.2));
+    color: var(--md-accent-fg-color, #536dfe);
+    padding: 0.25rem 0.75rem;
+    border-radius: 4px;
+    font-family: var(--md-code-font-family);
+    font-size: 0.85rem;
+    display: inline-block;
+    margin-bottom: 1rem;
+}
+
+.pipeline-detail pre {
+    margin: 1rem 0;
+}
+
+.pipeline-detail table {
+    width: 100%;
+    margin: 1rem 0;
+}
+
+.detail-content {
+    display: none;
+}
+
+.detail-content.active {
+    display: block;
+}
+
+.pipeline-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--md-default-fg-color--light, #999);
+    font-style: italic;
+}
+
+@media (max-width: 900px) {
+    .pipeline-container {
+        grid-template-columns: 1fr;
+    }
+
+    .pipeline-flow {
+        flex-direction: row;
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    .pipeline-arrow {
+        transform: rotate(90deg);
+    }
+}
+
+/* Custom Navigation Styling */
+/* Target Section Headers (Examples, API Reference) */
+.md-nav__item--section>.md-nav__link,
+.md-nav__item--section>label.md-nav__link {
+    color: #696969 !important;
+    /* Muted gray */
+    font-weight: 700 !important;
+    cursor: default !important;
+    opacity: 0.8;
+}
+
+/* Remove hover effect for sections */
+.md-nav__item--section>.md-nav__link:hover,
+.md-nav__item--section>label.md-nav__link:hover {
+    color: #999 !important;
+    background: transparent !important;
+    cursor: default !important;
+}
+
+/* Target Site Title in Sidebar (Path Generator) */
+.md-nav--primary>.md-nav__title {
+    color: #999 !important;
+    font-weight: 800 !important;
+    cursor: default !important;
+    pointer-events: none;
+    /* Make strictly non-interactive */
+}
+
+/* Indent items under section headers */
+.md-nav__item--section .md-nav__list {
+    margin-left: 12px !important;
+}
