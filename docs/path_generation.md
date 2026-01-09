@@ -153,7 +153,7 @@ start (100, 200)
 
 ## Transformation Pipeline
 
-Each simulation step applies these transformations in order:
+The physics simulation loop logically applies these transformations in order during every iteration:
 
 ```mermaid
 flowchart LR
@@ -166,7 +166,7 @@ flowchart LR
 
 === "1. Feedforward"
 
-    ### Feedforward + Braking
+    **Feedforward + Braking**
     
     > **Implementation:** Inlined physics calculation
     
@@ -186,7 +186,7 @@ flowchart LR
 
 === "2. PD Correction"
 
-    ### PD Correction
+    **PD Correction**
     
     > **Implementation:** Inlined physics calculation
     
@@ -208,7 +208,7 @@ flowchart LR
 
 === "3. Noise"
 
-    ### Noise (Ornstein-Uhlenbeck)
+    **Noise (Ornstein-Uhlenbeck)**
     
     > **Implementation:** Inlined physics calculation
     
@@ -230,7 +230,7 @@ flowchart LR
 
 === "4. Stabilization"
 
-    ### Stabilization
+    **Stabilization**
     
     > **Implementation:** Inlined physics calculation
     
@@ -247,7 +247,7 @@ flowchart LR
 
 === "5. Step Limiting"
 
-    ### Step Limiting
+    **Step Limiting**
     
     > **Implementation:** Inlined physics calculation
     
@@ -265,7 +265,7 @@ flowchart LR
 
 === "6. Integration"
 
-    ### Integration
+    **Integration**
     
     > **Implementation:** Inlined physics calculation
     
@@ -282,7 +282,7 @@ flowchart LR
 
 === "7. Point Density"
 
-    ### Point Density
+    **Point Density**
     
     > **Implementation:** Inlined physics calculation
     
