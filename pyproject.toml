@@ -25,7 +25,7 @@ windows = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/yourusername/pathgenerator"
+Homepage = "https://github.com/sockheadrps/Path-Generator"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/pathgenerator"]
